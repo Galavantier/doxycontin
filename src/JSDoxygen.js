@@ -1,11 +1,11 @@
 // Helpful for debug output.
 var tablevel = 0;
 function tabOutput(output){
-	var tabs = "";
-	for (var i = 0; i < tablevel; i++) {
-		tabs += "  ";
-	};
-	console.log(tabs + output);
+    var tabs = "";
+    for (var i = 0; i < tablevel; i++) {
+        tabs += "  ";
+    };
+    console.log(tabs + output);
 }
 
 /*--------------------------------------------Main------------------------------------------*/
@@ -25,7 +25,7 @@ cmd.version('0.0.1')
 
 // Command Line error checking.
 if(typeof cmd.file == 'undefined' ) {
-	cmd.help();
+    cmd.help();
 }
 
 // Read the file.
@@ -37,39 +37,61 @@ var astWrapper = vs.visitorNodeWrapperFactory(ast);
 // Phase 1. Find all the contexts.
 var contexts = [];
 
-var myVisitor = vs.visitorFactory({
-	CallExpression : function(nodeWrapper) {
-		tabOutput("CallExpression: ");
-		tablevel++;
-		tabOutput("Args: ");
-		nodeWrapper.arguments.nodes.forEach(function(subChild){
-			tabOutput(subChild.node.type);
-			tabOutput("  " + subChild.visit(myVisitor));
-			tabOutput("------------------------------");
-		});
-		tablevel--;
-	},
-	ArrayExpression : function(nodeWrapper) {
-		tabOutput("ArrayExpression: ");
-		tablevel++;
-		tabOutput("Elements: ");
-		nodeWrapper.elements.nodes.forEach(function(curElem){
-			tabOutput(curElem.node.type);
-			tabOutput("  " + curElem.visit(myVisitor));
-			tabOutput("------------------------------");
-		});
-		tablevel--;
-		return "End ArrayExpression";
-	},
-	Literal : function(nodeWrapper) {
-		return nodeWrapper.node.value;
-	},
-	Identifier : function(nodeWrapper) {
-		return nodeWrapper.node.name;
-	},
-	default : function(nodeWrapper) {
-		nodeWrapper.visitAllChildren(this);
-		return nodeWrapper.node.type;
-	}
+/*var myVisitor = vs.visitorFactory({
+    CallExpression : function(nodeWrapper) {
+        tabOutput("CallExpression: ");
+        tablevel++;
+        tabOutput("Args: ");
+        nodeWrapper.arguments.nodes.forEach(function(subChild){
+            tabOutput(subChild.node.type);
+            tabOutput("  " + subChild.visit(myVisitor));
+            tabOutput("------------------------------");
+        });
+        tablevel--;
+    },
+    ArrayExpression : function(nodeWrapper) {
+        tabOutput("ArrayExpression: ");
+        tablevel++;
+        tabOutput("Elements: ");
+        nodeWrapper.elements.nodes.forEach(function(curElem){
+            tabOutput(curElem.node.type);
+            tabOutput("  " + curElem.visit(myVisitor));
+            tabOutput("------------------------------");
+        });
+        tablevel--;
+        return "End ArrayExpression";
+    },
+    Literal : function(nodeWrapper) {
+        return nodeWrapper.node.value;
+    },
+    Identifier : function(nodeWrapper) {
+        return nodeWrapper.node.name;
+    },
+    default : function(nodeWrapper) {
+        nodeWrapper.visitAllChildren(this);
+        return nodeWrapper.node.type;
+    }
+});*/
+var contextVisitor = vs.visitorFactory({
+    curContext : null,
+    CallExpression : function(nodeWrapper) {
+        //find out what type of thing is getting called.
+        var callee = nodeWrapper.callee.visit(this);
+    },
+    MemberExpression : function(nodeWrapper) {
+        var object   = nodeWrapper.object.visit(this);
+        var property = nodeWrapper.property.visit(this);
+    },
+    Literal : function(nodeWrapper) {
+        return nodeWrapper.node.value;
+    },
+    Identifier : function(nodeWrapper) {
+        return nodeWrapper.node.name;
+    },
+    default : function(nodeWrapper) {
+        nodeWrapper.visitAllChildren(this);
+        return nodeWrapper.node.type;
+    }
 });
-astWrapper.visitAllChildren(myVisitor);
+
+astWrapper.visitAllChildren(contextVisitor);

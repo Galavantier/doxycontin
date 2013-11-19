@@ -14,12 +14,12 @@
  * @return visitor            A visitor object that can be passed into a visitorNodeWrapper .visit() function.
  */
 exports.visitorFactory = function (visitorMap) {
-	if(typeof visitorMap.default == 'undefined' ) {
-		visitorMap.default = function(nodeWrapper) {
-			return nodeWrapper.visitAllChildren(this);
-		}
-	}
-	return visitorMap;
+    if(typeof visitorMap.default == 'undefined' ) {
+        visitorMap.default = function(nodeWrapper) {
+            return nodeWrapper.visitAllChildren(this);
+        }
+    }
+    return visitorMap;
 };
 
 /**
@@ -28,40 +28,40 @@ exports.visitorFactory = function (visitorMap) {
  * @return visitorNodeWrapper      a wrapper object that contains the Esprima node as well as several useful methods for the visitor pattern.
  */
 exports.visitorNodeWrapperFactory = function (node) {
-	var wrapper = { 'type' : 'visitorNodeWrapper', 'node' : node };
+    var wrapper = { 'type' : 'visitorNodeWrapper', 'node' : node };
 
-	// Create an interface for each child node.
-	for (var key in node) {
+    // Create an interface for each child node.
+    for (var key in node) {
         if (node.hasOwnProperty(key)) {
             var child = node[key];
             if (typeof child === 'object' && child !== null) {
-            	if(Array.isArray(child)) {
-            		wrapper[key] = { type: "visitorNodeWrapperChildArray", nodes: [] };
-            		child.forEach(function(subNode) {
-            			wrapper[key].nodes.push(visitorNodeWrapperChildFactory(subNode));
-            		});
-            	}
-            	else {
-	            	wrapper[key] = visitorNodeWrapperChildFactory(node[key]);
-	            }
+                if(Array.isArray(child)) {
+                    wrapper[key] = { type: "visitorNodeWrapperChildArray", nodes: [] };
+                    child.forEach(function(subNode) {
+                        wrapper[key].nodes.push(visitorNodeWrapperChildFactory(subNode));
+                    });
+                }
+                else {
+                    wrapper[key] = visitorNodeWrapperChildFactory(node[key]);
+                }
             }
         }
     }
 
     wrapper.visitAllChildren = function(visitor) {
-    	for (var key in wrapper) {
-    		if(wrapper.hasOwnProperty(key)){
-    			var child = wrapper[key];
-    			if(child.type == "visitorNodeWrapperChild") {
-    				child.visit(visitor);
-    			}
-    			else if( child.type == "visitorNodeWrapperChildArray" ) {
-    				child.nodes.forEach(function(subChild){
-    					subChild.visit(visitor);
-    				});
-    			}
-    		}
-    	}
+        for (var key in wrapper) {
+            if(wrapper.hasOwnProperty(key)){
+                var child = wrapper[key];
+                if(child.type == "visitorNodeWrapperChild") {
+                    child.visit(visitor);
+                }
+                else if( child.type == "visitorNodeWrapperChildArray" ) {
+                    child.nodes.forEach(function(subChild){
+                        subChild.visit(visitor);
+                    });
+                }
+            }
+        }
     };
 
     return wrapper;
