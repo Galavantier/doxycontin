@@ -26,5 +26,8 @@ angular.module('about_us_module', ['$q'])
         return wait.promise;
 }])
 .factory('testFactory', function($q, $rootScope){
-    return {};
+    var b = {};
+    b.test = function(){};
+    b.pubVar = 6;
+    return b;
 });

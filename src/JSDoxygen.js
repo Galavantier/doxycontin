@@ -58,12 +58,12 @@ var contextVisitor = vs.visitorFactory({
                     this.curModule = context;
                     break;
                 case 'angularFactoryContext' :
-                    var factoryDef = nodeWrapper.arguments.nodes[1].visit(this);
+                    var factoryIntrfce = nodeWrapper.arguments.nodes[1].visit(this);
                     if( nodeWrapper.arguments.nodes[1].node.type == 'ArrayExpression' ) {
-                        context.members = factoryDef.pop();
-                        context.requirements = factoryDef;
+                        context.interfce = factoryIntrfce.pop();
+                        context.requirements = factoryIntrfce;
                     } else {
-                        context.members = factoryDef;
+                        context.interfce = factoryIntrfce;
                     }
                     break;
                 default:
@@ -113,23 +113,46 @@ var contextVisitor = vs.visitorFactory({
         return object + "." + property;
     },
     FunctionExpression : function(nodeWrapper) {
-        if(this.curContext) {
-            // Steal the current Context from the global state to prevent issues with recursion for functions that may exist inside the body.
-            var myContext = this.curContext;
-            this.curContext = null;
+        var interfce = nodeWrapper.node.type;
 
-            var members = nodeWrapper.body.visit(this);
-            console.log(members);
+        if(this.curContext) {
+            // Change the context to a temporary context that is local to the function itself.
+            var myContext = this.curContext;
+            this.curContext = { type : 'functionBodyContext', symbolTable : {} };
+
+            var body = nodeWrapper.body.visit(this);
 
             switch(myContext.type) {
                 case 'angularFactoryContext':
-                    //If the requirements haven't been determined yet, get them from the function params.
+                    // If the requirements haven't been determined yet, get them from the function params.
                     if(typeof myContext.requirements == 'undefined') {
                         myContext.requirements = [];
                         var self = this;
                         nodeWrapper.params.nodes.forEach(function(curParam){
                             myContext.requirements.push(curParam.visit(self));
                         });
+                    }
+
+                    // Find the return value of the function and use it to generate the interface of the factory.
+                    var factoryIntrfce = null;
+                    body.forEach(function(curStatement){
+                        if(typeof curStatement.type != 'undefined' && curStatement.type == 'returnContext') {
+                            factoryIntrfce = curStatement.value;
+                        }
+                    });
+
+                    // Determine if we are using an externally defined interface (i.e. a promise object), or if the interface is explicitly defined (i.e. with a jsObjectContext);
+                    if(typeof factoryIntrfce.type != 'undefined' && factoryIntrfce.type == 'jsObjectContext') {
+                        interfce = factoryIntrfce;
+                    }
+                    else {
+                        //Try to find the object in the symbol table.
+                        if( typeof this.curContext.symbolTable != 'undefined' && this.curContext.symbolTable.hasOwnProperty(factoryIntrfce) ) {
+                            interfce = this.curContext.symbolTable[factoryIntrfce];
+                        }
+                        else {
+                            interfce = { type : 'externalIntrfce', name : factoryIntrfce };
+                        }
                     }
                     break;
                 default:
@@ -139,7 +162,7 @@ var contextVisitor = vs.visitorFactory({
             // return the current Context to the global state.
             this.curContext = myContext;
         }
-        return nodeWrapper.node.type;
+        return interfce;
     },
     ArrayExpression : function(nodeWrapper) {
         var elems = [];
@@ -163,8 +186,13 @@ var contextVisitor = vs.visitorFactory({
         });
         return statements;
     },
+    ReturnStatement : function(nodeWrapper) {
+        var returnContext = { type : 'returnContext' };
+        returnContext.value = nodeWrapper.argument.visit(this);
+        return returnContext;
+    },
     ObjectExpression : function(nodeWrapper) {
-        var objContext = { type : "jsObject" };
+        var objContext = { type : "jsObjectContext" };
         //@TODO: Parse the properties of the object.
         return objContext;
     },
@@ -182,5 +210,5 @@ var contextVisitor = vs.visitorFactory({
 
 astWrapper.visitAllChildren(contextVisitor);
 
-console.log(globalContext);
+//console.log(globalContext);
 console.log(globalContext.contexts[0].contexts);
