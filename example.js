@@ -3,11 +3,11 @@
  * this is a test file
  * @namespace about_us_module
  */
-angular.module('about_us_module', [])
+angular.module('about_us_module', ['$q'])
 /*
  * @class teamMemberFactory
  */
-    .factory('teamMemberFactory', ['$http', '$q', 
+    .factory('teamMemberFactory', ['$http', '$q',
     /*
      * the constructor for teamMemberFactory
      * @return promise
@@ -24,4 +24,7 @@ angular.module('about_us_module', [])
             );
 
         return wait.promise;
-    }]);
+}])
+.factory('testFactory', function($q, $rootScope){
+    return {};
+});
