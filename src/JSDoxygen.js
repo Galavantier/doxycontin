@@ -35,46 +35,10 @@ var ast = esprima.parse(code, { loc : true, comment : true } );
 var astWrapper = vs.visitorNodeWrapperFactory(ast);
 
 // Phase 1. Find all the contexts.
-var contexts = [];
-var symbolTable = {};
+var globalContext = { symbolTable : {}, contexts : [] };
 
-/*var myVisitor = vs.visitorFactory({
-    CallExpression : function(nodeWrapper) {
-        tabOutput("CallExpression: ");
-        tablevel++;
-        tabOutput("Args: ");
-        nodeWrapper.arguments.nodes.forEach(function(subChild){
-            tabOutput(subChild.node.type);
-            tabOutput("  " + subChild.visit(myVisitor));
-            tabOutput("------------------------------");
-        });
-        tablevel--;
-    },
-    ArrayExpression : function(nodeWrapper) {
-        tabOutput("ArrayExpression: ");
-        tablevel++;
-        tabOutput("Elements: ");
-        nodeWrapper.elements.nodes.forEach(function(curElem){
-            tabOutput(curElem.node.type);
-            tabOutput("  " + curElem.visit(myVisitor));
-            tabOutput("------------------------------");
-        });
-        tablevel--;
-        return "End ArrayExpression";
-    },
-    Literal : function(nodeWrapper) {
-        return nodeWrapper.node.value;
-    },
-    Identifier : function(nodeWrapper) {
-        return nodeWrapper.node.name;
-    },
-    default : function(nodeWrapper) {
-        nodeWrapper.visitAllChildren(this);
-        return nodeWrapper.node.type;
-    }
-});*/
 var contextVisitor = vs.visitorFactory({
-    curContext : null,
+    curContext : globalContext,
     curModule  : null,
     CallExpression : function(nodeWrapper) {
         //find out what type of thing is getting called.
@@ -114,45 +78,37 @@ var contextVisitor = vs.visitorFactory({
 
         if(object == 'angular' && property == 'module') {
             // Create a new angular module context
-            var moduleContext = { type : 'angularModuleContext', location: nodeWrapper.node.loc, classes : [] };
-            contexts.push(moduleContext);
+            var moduleContext = { type : 'angularModuleContext', location: nodeWrapper.node.loc, contexts : [] };
+            this.curContext.contexts.push(moduleContext);
             return moduleContext;
         }
 
         //Try to find the object in the symbol table.
-        if(symbolTable.hasOwnProperty(object)) {
-            object = symbolTable[object];
+        if(this.curContext && typeof this.curContext.symbolTable != 'undefined' && this.curContext.symbolTable.hasOwnProperty(object)) {
+            object = this.curContext.symbolTable[object];
         }
 
         if( typeof object.type != 'undefined' && object.type == 'angularModuleContext' ) {
+            var newContext = { location : nodeWrapper.node.loc, symbolTable : {} };
             switch(property) {
                 case 'factory' :
-                    // Create a new angular factory context and add it to the parent angular context.
-                    var factoryContext = { type : 'angularFactoryContext', location: nodeWrapper.node.loc };
-                    object.classes.push(factoryContext);
-                    return factoryContext;
+                    newContext.type = 'angularFactoryContext';
                     break;
                 case 'service' :
-                    // Create a new angular service context and add it to the parent angular context.
-                    var factoryContext = { type : 'angularServiceContext', location: nodeWrapper.node.loc };
-                    object.classes.push(factoryContext);
-                    return factoryContext;
+                    newContext.type = 'angularServiceContext';
                     break;
                 case 'directive' :
-                    // Create a new angular directive context and add it to the parent angular context.
-                    var factoryContext = { type : 'angularDirectiveContext', location: nodeWrapper.node.loc };
-                    object.classes.push(factoryContext);
-                    return factoryContext;
+                    newContext.type = 'angularDirectiveContext';
                     break;
                 case 'controller' :
-                    // Create a new angular controller context and add it to the parent angular context.
-                    var factoryContext = { type : 'angularControllerContext', location: nodeWrapper.node.loc };
-                    object.classes.push(factoryContext);
-                    return factoryContext;
+                    newContext.type = 'angularControllerContext';
                     break;
                 default :
+                    return object + "." + property;
                     break;
             }
+            object.contexts.push(newContext);
+            return newContext;
         }
         return object + "." + property;
     },
@@ -163,6 +119,7 @@ var contextVisitor = vs.visitorFactory({
             this.curContext = null;
 
             var members = nodeWrapper.body.visit(this);
+            console.log(members);
 
             switch(myContext.type) {
                 case 'angularFactoryContext':
@@ -194,7 +151,22 @@ var contextVisitor = vs.visitorFactory({
     },
     VariableDeclarator : function(nodeWrapper) {
         // Everytime we declare a new variable, add it to the symbol table along with the object representing it's context or value.
-        symbolTable[nodeWrapper.id.visit(this)] = nodeWrapper.init.visit(this);
+        if(this.curContext && typeof this.curContext.symbolTable != 'undefined') {
+            this.curContext.symbolTable[nodeWrapper.id.visit(this)] = (nodeWrapper.node.init) ? nodeWrapper.init.visit(this) : null;
+        }
+    },
+    BlockStatement : function(nodeWrapper) {
+        var statements = [];
+        var self = this;
+        nodeWrapper.body.nodes.forEach(function(curStatement){
+            statements.push(curStatement.visit(self));
+        });
+        return statements;
+    },
+    ObjectExpression : function(nodeWrapper) {
+        var objContext = { type : "jsObject" };
+        //@TODO: Parse the properties of the object.
+        return objContext;
     },
     Literal : function(nodeWrapper) {
         return nodeWrapper.node.value;
@@ -210,5 +182,5 @@ var contextVisitor = vs.visitorFactory({
 
 astWrapper.visitAllChildren(contextVisitor);
 
-console.log(contexts);
-console.log(contexts[0].classes);
+console.log(globalContext);
+console.log(globalContext.contexts[0].contexts);
