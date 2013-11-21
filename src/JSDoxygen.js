@@ -35,46 +35,53 @@ var ast = esprima.parse(code, { loc : true, comment : true } );
 var astWrapper = vs.visitorNodeWrapperFactory(ast);
 
 // Phase 1. Find all the contexts.
-var globalContext = { symbolTable : {}, contexts : [] };
+var globalContext = { type: "globalContext", symbolTable : {}, contexts : [] };
 
 var contextVisitor = vs.visitorFactory({
     curContext : globalContext,
     curModule  : null,
     CallExpression : function(nodeWrapper) {
-        //find out what type of thing is getting called.
-        tablevel++;
+        //find out what is getting called.
         var context = nodeWrapper.callee.visit(this);
-        this.curContext = context;
-        tablevel--;
-        //tabOutput("call context: " + ((typeof context.type != 'undefined') ? context.type : context) );
 
-        if(typeof context.type != 'undefined' && context.type.search('angular') != -1) {
-            // The first argument of any angular context is the name of the context.
-            context.name = nodeWrapper.arguments.nodes[0].visit(this);
-            switch(context.type) {
-                case 'angularModuleContext' :
-                    // The second argument of an angular module is it's requirements.
-                    context.requirements = nodeWrapper.arguments.nodes[1].visit(this);
-                    this.curModule = context;
-                    break;
-                case 'angularFactoryContext' :
-                    var factoryIntrfce = nodeWrapper.arguments.nodes[1].visit(this);
-                    if( nodeWrapper.arguments.nodes[1].node.type == 'ArrayExpression' ) {
-                        context.interfce = factoryIntrfce.pop();
-                        context.requirements = factoryIntrfce;
-                    } else {
-                        context.interfce = factoryIntrfce;
+        if(this.curContext.type == 'functionBodyContext') {
+            return context;
+        }
+
+        if(typeof context.type != 'undefined') {
+            if(context.type.search('Context') != -1) {
+                var myContext = this.curContext;
+                this.curContext = context;
+                if(context.type.search('angular') != -1) {
+                    // The first argument of any angular context is the name of the context.
+                    context.name = nodeWrapper.arguments.nodes[0].visit(this);
+                    switch(context.type) {
+                        case 'angularModuleContext' :
+                            // The second argument of an angular module is it's requirements.
+                            context.requirements = nodeWrapper.arguments.nodes[1].visit(this);
+                            this.curModule = context;
+                            break;
+                        case 'angularFactoryContext' :
+                            var factoryIntrfce = nodeWrapper.arguments.nodes[1].visit(this);
+                            if( nodeWrapper.arguments.nodes[1].node.type == 'ArrayExpression' ) {
+                                context.interfce = factoryIntrfce.pop();
+                                context.requirements = factoryIntrfce;
+                            } else {
+                                context.interfce = factoryIntrfce;
+                            }
+                            break;
+                        default:
+                            break;
                     }
-                    break;
-                default:
-                    break;
+                    this.curContext = myContext;
+                    return this.curModule;
+                }
             }
         }
-        return this.curModule;
     },
     MemberExpression : function(nodeWrapper) {
         var object   = nodeWrapper.object.visit(this);
-        var property = nodeWrapper.property.visit(this)
+        var property = nodeWrapper.property.visit(this);
 
         if(object == 'angular' && property == 'module') {
             // Create a new angular module context
@@ -88,28 +95,44 @@ var contextVisitor = vs.visitorFactory({
             object = this.curContext.symbolTable[object];
         }
 
-        if( typeof object.type != 'undefined' && object.type == 'angularModuleContext' ) {
-            var newContext = { location : nodeWrapper.node.loc, symbolTable : {} };
-            switch(property) {
-                case 'factory' :
-                    newContext.type = 'angularFactoryContext';
-                    break;
-                case 'service' :
-                    newContext.type = 'angularServiceContext';
-                    break;
-                case 'directive' :
-                    newContext.type = 'angularDirectiveContext';
-                    break;
-                case 'controller' :
-                    newContext.type = 'angularControllerContext';
-                    break;
-                default :
-                    return object + "." + property;
-                    break;
+        if( typeof object.type != 'undefined' ) {
+            if( object.type == 'angularModuleContext' ) {
+                var newContext = { location : nodeWrapper.node.property.loc };
+                switch(property) {
+                    case 'factory' :
+                        newContext.type = 'angularFactoryContext';
+                        break;
+                    case 'service' :
+                        newContext.type = 'angularServiceContext';
+                        break;
+                    case 'directive' :
+                        newContext.type = 'angularDirectiveContext';
+                        break;
+                    case 'controller' :
+                        newContext.type = 'angularControllerContext';
+                        break;
+                    default :
+                        return object + "." + property;
+                        break;
+                }
+                object.contexts.push(newContext);
+                return newContext;
             }
-            object.contexts.push(newContext);
-            return newContext;
+            else if( object.type == 'jsObjectContext' ) {
+                var propertyExists = false;
+                object.members.forEach(function(curMember){
+                    if(typeof curMember.name != 'undefined' && curMember.name == property) {
+                        propertyExists = true;
+                    }
+                });
+                if(!propertyExists) {
+                    var objContext = { name : property };
+                    object.members.push(objContext);
+                    return objContext;
+                }
+            }
         }
+
         return object + "." + property;
     },
     FunctionExpression : function(nodeWrapper) {
@@ -158,7 +181,6 @@ var contextVisitor = vs.visitorFactory({
                 default:
                     break;
             }
-
             // return the current Context to the global state.
             this.curContext = myContext;
         }
@@ -192,9 +214,36 @@ var contextVisitor = vs.visitorFactory({
         return returnContext;
     },
     ObjectExpression : function(nodeWrapper) {
-        var objContext = { type : "jsObjectContext" };
-        //@TODO: Parse the properties of the object.
+        var objContext = { type : "jsObjectContext", members : [] };
+
+        // Parse the properties of the object.
+        var self = this;
+        nodeWrapper.properties.nodes.forEach(function(curProperty){
+            var propertyContext = curProperty.visit(self);
+            objContext.members.push(propertyContext);
+        });
         return objContext;
+    },
+    Property : function(nodeWrapper) {
+        if(nodeWrapper.node.kind == 'init') {
+            var propName = nodeWrapper.key.visit(this);
+            var objContext = { name : propName, type : nodeWrapper.node.value.type, location: nodeWrapper.node.loc };
+            if(nodeWrapper.node.value.type == 'Literal') {
+                objContext.value = nodeWrapper.value.visit(this);
+            }
+            return objContext;
+        }
+    },
+    AssignmentExpression : function(nodeWrapper) {
+        if(nodeWrapper.node.operator == '=') {
+            var objContext      = nodeWrapper.left.visit(this);
+            objContext.type     = nodeWrapper.node.right.type;
+            objContext.location = nodeWrapper.node.loc;
+            if(nodeWrapper.node.right.type == 'Literal') {
+                objContext.value = nodeWrapper.right.visit(this);
+            }
+            return objContext;
+        }
     },
     Literal : function(nodeWrapper) {
         return nodeWrapper.node.value;
@@ -210,5 +259,49 @@ var contextVisitor = vs.visitorFactory({
 
 astWrapper.visitAllChildren(contextVisitor);
 
-//console.log(globalContext);
-console.log(globalContext.contexts[0].contexts);
+// Phase 2. Match up all the contexts with the comment blocks
+function matchComments(context) {
+    // Match the comment to the context.
+    if(typeof context.location != 'undefined') {
+        ast.comments.forEach(function(curComment, index){
+            if(curComment.type == "Block") {
+                if( (curComment.loc.end.line + 1) == context.location.start.line ) {
+                    context.docBlock = ast.comments.splice(index, 1 );
+                }
+            }
+        });
+    }
+
+    // Recursively match comments of child contexts.
+    if(typeof context.interfce != 'undefined' && typeof context.interfce.members != 'undefined') {
+        context.interfce.members.forEach(function(member){
+            matchComments(member);
+        });
+    }
+    if(typeof context.contexts != 'undefined') {
+        context.contexts.forEach(function(childContext){
+            matchComments(childContext);
+        });
+    }
+}
+matchComments(globalContext);
+
+console.log("ast.comments:");
+console.log(ast.comments);
+
+console.log("");
+console.log("globalContext: ");
+console.log(globalContext);
+console.log("");
+console.log("Contexts: ");
+console.log("-----------------");
+console.log("Context Name: " + globalContext.contexts[0].name + " Context Type: " + globalContext.contexts[0].type);
+console.log(globalContext.contexts[0].docBlock);
+console.log(globalContext.contexts[0].location);
+console.log("");
+globalContext.contexts[0].contexts.forEach(function(curContext){
+    console.log("Context Name: " + curContext.name + " Context Type: " + curContext.type);
+    console.log(curContext.docBlock);
+    console.log(curContext.interfce);
+    console.log("");
+});
