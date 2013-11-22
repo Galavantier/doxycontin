@@ -4,35 +4,39 @@
  * @namespace about_us_module
  */
 var module = angular.module('about_us_module', ['$q'])
-/*
- * @class teamMemberFactory
- */
-    .factory('teamMemberFactory', ['$http', '$q',
-    function($http, $q) {
-        var teamMembers;
-        var wait = $q.defer();
+.directive('stickyNav', [function(){
+        return {
+            transclude : true, // must have transclude so that any controllers inside the directive will work
+            template : '<div data-ng-transclude=""></div>', // We must have a template for transclude to work
+            scope : {
+                stickyStart : "@", // Either an element id or a number
+                stickyEnd   : "@"  // Either an element id or a number
+            },
+            link : function($scope, $element, $attrs) {
+                var addAffixClasses = function(scrollTop) {
 
-        $http.get('/about-us/get-team-members/')
-            .success(
-                function (data, status) {
-                    wait.resolve(data);
-                }
-            );
+                    var footerStart = jQuery(document).height() - Number($scope.stickyEnd);
 
-        return wait.promise;
-}])
-.factory('testFactory', function($q, $rootScope){
-    var a = {};
-    a.testfunc = function(stuff){};
-    a.testfunc();
-    return a;
-});
+                    var documentRemaining = footerStart - scrollTop;
 
-module.factory('objFactory', function($http){
-    return {
-        publicVar : false,
-        funcA : function(stuff){
+                    if( scrollTop < (Number($scope.stickyStart)) ) {
+                        $element.removeClass('affix-bottom').removeClass('affix').addClass('affix-top');
+                    }
+                    else if( documentRemaining > $element.height() ) {
+                        $element.removeClass('affix-top').removeClass('affix-bottom').addClass('affix');
+                    }
+                    else {
+                        $element.removeClass('affix-top').removeClass('affix').addClass('affix-bottom');
+                    }
+                };
 
-        }
-    };
-});
+                jQuery('document').ready(function(){
+                    addAffixClasses(jQuery(window).scrollTop());
+
+                    jQuery(window).scroll(function(){
+                        addAffixClasses(jQuery(this).scrollTop());
+                    });
+                });
+            }
+        };
+    }]);

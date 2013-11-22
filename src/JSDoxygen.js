@@ -70,6 +70,15 @@ var contextVisitor = vs.visitorFactory({
                                 context.interfce = factoryIntrfce;
                             }
                             break;
+                        case 'angularDirectiveContext' :
+                            var directiveArgs = nodeWrapper.arguments.nodes[1].visit(this);
+                            if( nodeWrapper.arguments.nodes[1].node.type == 'ArrayExpression' ) {
+                                context.params = directiveArgs.pop();
+                                context.requirements = directiveArgs;
+                            } else {
+                                context.params = directiveArgs;
+                            }
+                            break;
                         default:
                             break;
                     }
@@ -135,6 +144,68 @@ var contextVisitor = vs.visitorFactory({
 
         return object + "." + property;
     },
+    FunctionDeclaration : function(nodeWrapper) {
+        var interfce = nodeWrapper.node.type;
+
+        if(this.curContext) {
+            // Change the context to a temporary context that is local to the function itself.
+            var myContext = this.curContext;
+            this.curContext = { type : 'functionBodyContext', symbolTable : {} };
+
+            var body = nodeWrapper.body.visit(this);
+
+            switch(myContext.type) {
+                case 'globalContext':
+                    // Find the return value of the function and use it to generate the interface of the factory.
+                    var factoryIntrfce = null;
+                    body.forEach(function(curStatement){
+                        if(typeof curStatement.type != 'undefined' && curStatement.type == 'returnContext') {
+                            factoryIntrfce = curStatement.value;
+                        }
+                    });
+
+                    // Are we a factory (I.E. a constructor of a class), or are we just a regular procedural function.
+                    if(typeof factoryIntrfce.type != 'undefined' && factoryIntrfce.type == 'jsObjectContext') {
+                        interfce = factoryIntrfce;
+                    }
+                    else {
+                        //Try to find the object in the symbol table.
+                        if( typeof this.curContext.symbolTable != 'undefined' && this.curContext.symbolTable.hasOwnProperty(factoryIntrfce) ) {
+                            interfce = this.curContext.symbolTable[factoryIntrfce];
+                        }
+                        else {
+                            interfce = { type : 'jsFunctionContext', returnVal : factoryIntrfce };
+                        }
+                    }
+
+                    var symbolName = nodeWrapper.id.visit(this);
+                    // add the function the list of contexts
+                    switch (interfce.type) {
+                        case 'jsFunctionContext':
+                            interfce.name     = symbolName;
+                            interfce.location = nodeWrapper.node.loc;
+                            myContext.contexts.push(interfce);
+                            break;
+                        case 'jsObjectContext':
+                            var newContext = {
+                                name : symbolName,
+                                type : 'jsFactoryContext',
+                                'interfce' : interfce,
+                                location : nodeWrapper.node.loc
+                            };
+                            myContext.contexts.push(newContext);
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                default:
+                    break;
+            }
+            // return the current Context to the global state.
+            this.curContext = myContext;
+        }
+    },
     FunctionExpression : function(nodeWrapper) {
         var interfce = nodeWrapper.node.type;
 
@@ -146,6 +217,29 @@ var contextVisitor = vs.visitorFactory({
             var body = nodeWrapper.body.visit(this);
 
             switch(myContext.type) {
+                case 'globalContext':
+                    // Find the return value of the function and use it to generate the interface of the factory.
+                    var factoryIntrfce = null;
+                    body.forEach(function(curStatement){
+                        if(typeof curStatement.type != 'undefined' && curStatement.type == 'returnContext') {
+                            factoryIntrfce = curStatement.value;
+                        }
+                    });
+
+                    // Are we a factory (I.E. a constructor of a class), or are we just a regular procedural function.
+                    if(typeof factoryIntrfce.type != 'undefined' && factoryIntrfce.type == 'jsObjectContext') {
+                        interfce = factoryIntrfce;
+                    }
+                    else {
+                        //Try to find the object in the symbol table.
+                        if( typeof this.curContext.symbolTable != 'undefined' && this.curContext.symbolTable.hasOwnProperty(factoryIntrfce) ) {
+                            interfce = this.curContext.symbolTable[factoryIntrfce];
+                        }
+                        else {
+                            interfce = { type : 'jsFunctionContext', returnVal : factoryIntrfce };
+                        }
+                    }
+                    break;
                 case 'angularFactoryContext':
                     // If the requirements haven't been determined yet, get them from the function params.
                     if(typeof myContext.requirements == 'undefined') {
@@ -194,12 +288,6 @@ var contextVisitor = vs.visitorFactory({
         });
         return elems;
     },
-    VariableDeclarator : function(nodeWrapper) {
-        // Everytime we declare a new variable, add it to the symbol table along with the object representing it's context or value.
-        if(this.curContext && typeof this.curContext.symbolTable != 'undefined') {
-            this.curContext.symbolTable[nodeWrapper.id.visit(this)] = (nodeWrapper.node.init) ? nodeWrapper.init.visit(this) : null;
-        }
-    },
     BlockStatement : function(nodeWrapper) {
         var statements = [];
         var self = this;
@@ -232,6 +320,35 @@ var contextVisitor = vs.visitorFactory({
                 objContext.value = nodeWrapper.value.visit(this);
             }
             return objContext;
+        }
+    },
+    VariableDeclarator : function(nodeWrapper) {
+        // Everytime we declare a new variable, add it to the symbol table along with the object representing it's context or value.
+        if(this.curContext && typeof this.curContext.symbolTable != 'undefined') {
+            var symbolName = nodeWrapper.id.visit(this);
+            this.curContext.symbolTable[symbolName] = (nodeWrapper.node.init) ? nodeWrapper.init.visit(this) : null;
+
+            // If we are in the global context and this is a function, add it the list of contexts
+            if(typeof this.curContext.type != 'undefined' && this.curContext.type == 'globalContext' && this.curContext.symbolTable[symbolName] != null && typeof this.curContext.symbolTable[symbolName].type != 'undefined') {
+                switch (this.curContext.symbolTable[symbolName].type) {
+                    case 'jsFunctionContext':
+                        this.curContext.symbolTable[symbolName].name     = symbolName;
+                        this.curContext.symbolTable[symbolName].location = nodeWrapper.node.loc;
+                        this.curContext.contexts.push(this.curContext.symbolTable[symbolName]);
+                        break;
+                    case 'jsObjectContext':
+                        var newContext = {
+                            name : symbolName,
+                            type : 'jsFactoryContext',
+                            interfce : this.curContext.symbolTable[symbolName],
+                            location : nodeWrapper.node.loc
+                        };
+                        this.curContext.contexts.push(newContext);
+                        break;
+                    default:
+                        break;
+                }
+            }
         }
     },
     AssignmentExpression : function(nodeWrapper) {
@@ -295,13 +412,15 @@ console.log(globalContext);
 console.log("");
 console.log("Contexts: ");
 console.log("-----------------");
-console.log("Context Name: " + globalContext.contexts[0].name + " Context Type: " + globalContext.contexts[0].type);
+/*console.log("Context Name: " + globalContext.contexts[0].name + " Context Type: " + globalContext.contexts[0].type);
 console.log(globalContext.contexts[0].docBlock);
 console.log(globalContext.contexts[0].location);
-console.log("");
+console.log(globalContext.contexts[0].interfce.members[0].docBlock);
+console.log("");*/
 globalContext.contexts[0].contexts.forEach(function(curContext){
-    console.log("Context Name: " + curContext.name + " Context Type: " + curContext.type);
+    console.log(curContext);
+/*    console.log("Context Name: " + curContext.name + " Context Type: " + curContext.type);
     console.log(curContext.docBlock);
-    console.log(curContext.interfce);
+    console.log(curContext.interfce);*/
     console.log("");
 });
