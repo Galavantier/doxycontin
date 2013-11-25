@@ -207,7 +207,7 @@ var contextVisitor = vs.visitorFactory({
                     });
 
                     // Are we a factory (I.E. a constructor of a class), or are we just a regular procedural function.
-                    if(typeof factoryIntrfce.type != 'undefined' && factoryIntrfce.type == 'jsObjectContext') {
+                    if(factoryIntrfce && typeof factoryIntrfce.type != 'undefined' && factoryIntrfce.type == 'jsObjectContext') {
                         interfce = factoryIntrfce;
                     }
                     else {
@@ -216,7 +216,12 @@ var contextVisitor = vs.visitorFactory({
                             interfce = this.curContext.symbolTable[factoryIntrfce];
                         }
                         else {
-                            interfce = { type : 'jsFunctionContext', returnVal : factoryIntrfce };
+                            var myParams = [];
+                            var self = this;
+                            nodeWrapper.params.nodes.forEach(function(curParam){
+                                myParams.push(curParam.visit(self));
+                            });
+                            interfce = { type : 'jsFunctionContext', returnVal : factoryIntrfce, params : myParams };
                         }
                     }
 
@@ -268,7 +273,7 @@ var contextVisitor = vs.visitorFactory({
                     });
 
                     // Are we a factory (I.E. a constructor of a class), or are we just a regular procedural function.
-                    if(typeof factoryIntrfce.type != 'undefined' && factoryIntrfce.type == 'jsObjectContext') {
+                    if(factoryIntrfce && typeof factoryIntrfce.type != 'undefined' && factoryIntrfce.type == 'jsObjectContext') {
                         interfce = factoryIntrfce;
                     }
                     else {
@@ -277,7 +282,12 @@ var contextVisitor = vs.visitorFactory({
                             interfce = this.curContext.symbolTable[factoryIntrfce];
                         }
                         else {
-                            interfce = { type : 'jsFunctionContext', returnVal : factoryIntrfce };
+                            var myParams = [];
+                            var self = this;
+                            nodeWrapper.params.nodes.forEach(function(curParam){
+                                myParams.push(curParam.visit(self));
+                            });
+                            interfce = { type : 'jsFunctionContext', returnVal : factoryIntrfce, params : myParams };
                         }
                     }
                     break;
@@ -498,5 +508,34 @@ function matchComments(context) {
     }
 }
 matchComments(globalContext);
+
+// Phase 3. Output the resulting datastructure as a PHP like skeleton file that is readable by Doxygen.
+function renderContext(curContext, tablevel) {
+    if(typeof tablevel == 'undefined') { tablevel = 0; }
+
+    // This is a class.
+    if( typeof curContext.interfce != 'undefined' ) {
+        if( curContext.interfce.type == 'externalIntrfce' ) {
+            // This class inherits from some external Class.
+        } else if( curContext.interfce.type == 'jsObjectContext' ) {
+            // Recurse into each class member.
+            curContext.interfce.members.forEach(function(curMember) {
+                renderContext(curMember, tablevel++);
+            });
+        }
+    } else if( typeof curContext.params != 'undefined' ) {
+        // This is a function.
+    } else if( curContext.type == 'Literal' ) {
+        // We a literal value.
+        // @TODO: determine the type.
+    }
+
+    if( typeof curContext.contexts != 'undefined' ) {
+        // Recurse to the children contexts.
+        curContext.contexts.forEach(function(childContext){
+            renderContext(childContext);
+        });
+    }
+};
 
 console.log(prettyjson.render(globalContext));

@@ -1,8 +1,3 @@
-/*
- * @file example.js
- * this is a test file
- * @namespace about_us_module
- */
 var module = angular.module('about_us_module', ['$q'])
     .factory('teamMemberFactory', ['$http', '$q', function($http, $q) {
         return {
@@ -15,13 +10,6 @@ var module = angular.module('about_us_module', ['$q'])
         $scope.btnLabel = 'read more';
         $scope.btnArrow = 'icon-down-dir';
 
-        /**
-         * lkjsflkjsdf
-         * @param  {[type]} a [description]
-         * @param  {[type]} b [description]
-         * @param  {[type]} c [description]
-         * @return {[type]}   [description]
-         */
         $scope.toggleBox = function(a,b,c) {
             if ($scope.isBoxOpen) {
                 $scope.isBoxOpen = false;
@@ -34,3 +22,5 @@ var module = angular.module('about_us_module', ['$q'])
             }
         };
     }]);
+
+var globalFunc = function(w,t,f){};
