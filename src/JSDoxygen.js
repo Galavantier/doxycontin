@@ -15,6 +15,8 @@ var cmd = require('commander');
 var fs = require('fs');
 //Esprima
 var esprima = require('esprima');
+// Make output pretty for debugging
+var prettyjson = require('prettyjson');
 
 //Facilitates the visitor pattern by creating wrapper objects around the Esprima ast nodes.
 var vs = require('./visitorPattern.js');
@@ -37,7 +39,7 @@ var astWrapper = vs.visitorNodeWrapperFactory(ast);
 // Phase 1. Find all the contexts.
 var globalContext = { type: "globalContext", symbolTable : {}, contexts : [] };
 
-var attrFinder = vs.visitorFactory(
+var attrCollector = vs.visitorFactory(
 {
     attrContext : [],
     MemberExpression : function(nodeWrapper) {
@@ -64,8 +66,8 @@ var attrFinder = vs.visitorFactory(
 });
 
 var contextVisitor = vs.visitorFactory({
-    curContext : globalContext,
-    curModule  : null,
+    curContext      : globalContext,
+    curModule       : null,
     CallExpression : function(nodeWrapper) {
         //find out what is getting called.
         var context = nodeWrapper.callee.visit(this);
@@ -105,6 +107,15 @@ var contextVisitor = vs.visitorFactory({
                                 context.params = directiveArgs;
                             }
                             break;
+                        case 'angularControllerContext' :
+                            var controllerArgs = nodeWrapper.arguments.nodes[1].visit(this);
+                            if( nodeWrapper.arguments.nodes[1].node.type == 'ArrayExpression' ) {
+                                context.interfce = controllerArgs.pop();
+                                context.requirements = controllerArgs;
+                            } else {
+                                context.interfce = controllerArgs;
+                            }
+                            break;
                         default:
                             break;
                     }
@@ -127,6 +138,11 @@ var contextVisitor = vs.visitorFactory({
 
         //Try to find the object in the symbol table.
         if(this.curContext && typeof this.curContext.symbolTable != 'undefined' && this.curContext.symbolTable.hasOwnProperty(object)) {
+            object = this.curContext.symbolTable[object];
+        }
+        //If this is referencing $scope, and scope has not yet been defined, magically create the $scope object.
+        else if ( this.curContext && typeof this.curContext.symbolTable != 'undefined' && (object == '$scope' || object == 'scope') ) {
+            this.curContext.symbolTable[object] = { type : 'jsObjectContext', name : object, members : [] };
             object = this.curContext.symbolTable[object];
         }
 
@@ -240,12 +256,11 @@ var contextVisitor = vs.visitorFactory({
             var myContext = this.curContext;
             this.curContext = { type : 'functionBodyContext', symbolTable : {} };
 
-            var body = nodeWrapper.body.visit(this);
-
             switch(myContext.type) {
                 case 'globalContext':
                     // Find the return value of the function and use it to generate the interface of the factory.
                     var factoryIntrfce = null;
+                    var body = nodeWrapper.body.visit(this);
                     body.forEach(function(curStatement){
                         if(typeof curStatement.type != 'undefined' && curStatement.type == 'returnContext') {
                             factoryIntrfce = curStatement.value;
@@ -278,6 +293,7 @@ var contextVisitor = vs.visitorFactory({
 
                     // Find the return value of the function and use it to generate the interface of the factory.
                     var factoryIntrfce = null;
+                    var body = nodeWrapper.body.visit(this);
                     body.forEach(function(curStatement){
                         if(typeof curStatement.type != 'undefined' && curStatement.type == 'returnContext') {
                             factoryIntrfce = curStatement.value;
@@ -301,6 +317,7 @@ var contextVisitor = vs.visitorFactory({
                 case 'angularDirectiveContext':
                     // The return statement is used to determine all the params of a directive.
                     var returnVal = null;
+                    var body = nodeWrapper.body.visit(this);
                     body.forEach(function(curStatement){
                         if(typeof curStatement.type != 'undefined' && curStatement.type == 'returnContext') {
                             returnVal = curStatement.value;
@@ -320,16 +337,32 @@ var contextVisitor = vs.visitorFactory({
                                 params.push(curMember.name);
                             });
                         }
-                        nodeWrapper.visitAllChildren(attrFinder);
-                        link = attrFinder.attrContext;
+                        nodeWrapper.visitAllChildren(attrCollector);
+                        link = attrCollector.attrContext;
                         if(link.length > 0) {
                             params = params.concat(link);
                         }
-                        return params;
+                        interfce = params;
                     }
                     break;
+                case 'angularControllerContext':
+                    var body = nodeWrapper.body.visit(this);
+                    var scopeContext = {};
+                    if( this.curContext.symbolTable.hasOwnProperty('$scope') ) {
+                        scopeContext = this.curContext.symbolTable.$scope;
+                    }
+                    else if ( this.curContext.symbolTable.hasOwnProperty('scope') ) {
+                        scopeContext = this.curContext.symbolTable.scope;
+                    }
+                    interfce = scopeContext;
+                    break;
                 default:
-                    return body;
+                    var params = [];
+                    var self = this;
+                    nodeWrapper.params.nodes.forEach(function(curParam){
+                        params.push(curParam.visit(self));
+                    });
+                    interfce = params;
                     break;
             }
             // return the current Context to the global state.
@@ -373,7 +406,12 @@ var contextVisitor = vs.visitorFactory({
         if(nodeWrapper.node.kind == 'init') {
             var propName = nodeWrapper.key.visit(this);
             var objContext = { name : propName, type : nodeWrapper.node.value.type, location: nodeWrapper.node.loc };
-            objContext.value = nodeWrapper.value.visit(this);
+            var val = nodeWrapper.value.visit(this);
+            if(objContext.type == 'FunctionExpression') {
+                objContext.params = val;
+            } else {
+                objContext.value = val;
+            }
             return objContext;
         }
     },
@@ -411,8 +449,11 @@ var contextVisitor = vs.visitorFactory({
             var objContext      = nodeWrapper.left.visit(this);
             objContext.type     = nodeWrapper.node.right.type;
             objContext.location = nodeWrapper.node.loc;
-            if(nodeWrapper.node.right.type == 'Literal') {
-                objContext.value = nodeWrapper.right.visit(this);
+            var val = nodeWrapper.right.visit(this);
+            if(objContext.type == 'FunctionExpression') {
+                objContext.params = val;
+            } else {
+                objContext.value = val;
             }
             return objContext;
         }
@@ -458,24 +499,4 @@ function matchComments(context) {
 }
 matchComments(globalContext);
 
-console.log("ast.comments:");
-console.log(ast.comments);
-
-console.log("");
-console.log("globalContext: ");
-console.log(globalContext);
-console.log("");
-console.log("Contexts: ");
-console.log("-----------------");
-/*console.log("Context Name: " + globalContext.contexts[0].name + " Context Type: " + globalContext.contexts[0].type);
-console.log(globalContext.contexts[0].docBlock);
-console.log(globalContext.contexts[0].location);
-console.log(globalContext.contexts[0].interfce.members[0].docBlock);
-console.log("");*/
-globalContext.contexts[0].contexts.forEach(function(curContext){
-    console.log(curContext);
-/*    console.log("Context Name: " + curContext.name + " Context Type: " + curContext.type);
-    console.log(curContext.docBlock);
-    console.log(curContext.interfce);*/
-    console.log("");
-});
+console.log(prettyjson.render(globalContext));

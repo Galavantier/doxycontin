@@ -4,40 +4,33 @@
  * @namespace about_us_module
  */
 var module = angular.module('about_us_module', ['$q'])
-.directive('stickyNav', [function(){
+    .factory('teamMemberFactory', ['$http', '$q', function($http, $q) {
         return {
-            transclude : true, // must have transclude so that any controllers inside the directive will work
-            template : '<div data-ng-transclude=""></div>', // We must have a template for transclude to work
-            scope : {
-                stickyStart : "@", // Either an element id or a number
-                stickyEnd   : "@"  // Either an element id or a number
-            },
-            link : function($scope, $element, $attrs) {
-                var someParam = $attrs.stuffIsAttr;
-                var addAffixClasses = function(scrollTop) {
+            someval : true,
+            someFunc : function(x,y,z) {}
+        };
+    }])
+.controller('moreInfoController', ['$scope', function($scope) {
+        $scope.isBoxOpen = false;
+        $scope.btnLabel = 'read more';
+        $scope.btnArrow = 'icon-down-dir';
 
-                    var footerStart = jQuery(document).height() - Number($scope.stickyEnd);
-
-                    var documentRemaining = footerStart - scrollTop;
-
-                    if( scrollTop < (Number($scope.stickyStart)) ) {
-                        $element.removeClass('affix-bottom').removeClass('affix').addClass('affix-top');
-                    }
-                    else if( documentRemaining > $element.height() ) {
-                        $element.removeClass('affix-top').removeClass('affix-bottom').addClass('affix');
-                    }
-                    else {
-                        $element.removeClass('affix-top').removeClass('affix').addClass('affix-bottom');
-                    }
-                };
-
-                jQuery('document').ready(function(){
-                    addAffixClasses(jQuery(window).scrollTop());
-
-                    jQuery(window).scroll(function(){
-                        addAffixClasses(jQuery(this).scrollTop());
-                    });
-                });
+        /**
+         * lkjsflkjsdf
+         * @param  {[type]} a [description]
+         * @param  {[type]} b [description]
+         * @param  {[type]} c [description]
+         * @return {[type]}   [description]
+         */
+        $scope.toggleBox = function(a,b,c) {
+            if ($scope.isBoxOpen) {
+                $scope.isBoxOpen = false;
+                $scope.btnLabel = 'read more';
+                $scope.btnArrow = 'icon-down-dir';
+            } else {
+                $scope.isBoxOpen = true;
+                $scope.btnLabel = 'read less';
+                $scope.btnArrow = 'icon-up-dir';
             }
         };
     }]);
