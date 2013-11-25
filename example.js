@@ -13,6 +13,7 @@ var module = angular.module('about_us_module', ['$q'])
                 stickyEnd   : "@"  // Either an element id or a number
             },
             link : function($scope, $element, $attrs) {
+                var someParam = $attrs.stuffIsAttr;
                 var addAffixClasses = function(scrollTop) {
 
                     var footerStart = jQuery(document).height() - Number($scope.stickyEnd);

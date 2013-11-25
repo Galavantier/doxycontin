@@ -37,6 +37,32 @@ var astWrapper = vs.visitorNodeWrapperFactory(ast);
 // Phase 1. Find all the contexts.
 var globalContext = { type: "globalContext", symbolTable : {}, contexts : [] };
 
+var attrFinder = vs.visitorFactory(
+{
+    attrContext : [],
+    MemberExpression : function(nodeWrapper) {
+        var object   = nodeWrapper.object.visit(this);
+        var property = nodeWrapper.property.visit(this);
+        if(object == '$attrs' || object == 'attrs') {
+            var unique = true;
+            this.attrContext.forEach(function(curAttr){
+                if(property == curAttr) {
+                    unique = false;
+                }
+            });
+            if(unique) {
+                this.attrContext.push(property);
+            }
+        }
+    },
+    Literal : function(nodeWrapper) {
+        return nodeWrapper.node.value;
+    },
+    Identifier : function(nodeWrapper) {
+        return nodeWrapper.node.name;
+    }
+});
+
 var contextVisitor = vs.visitorFactory({
     curContext : globalContext,
     curModule  : null,
@@ -263,7 +289,7 @@ var contextVisitor = vs.visitorFactory({
                         interfce = factoryIntrfce;
                     }
                     else {
-                        //Try to find the object in the symbol table.
+                        // Try to find the object in the symbol table.
                         if( typeof this.curContext.symbolTable != 'undefined' && this.curContext.symbolTable.hasOwnProperty(factoryIntrfce) ) {
                             interfce = this.curContext.symbolTable[factoryIntrfce];
                         }
@@ -272,7 +298,38 @@ var contextVisitor = vs.visitorFactory({
                         }
                     }
                     break;
+                case 'angularDirectiveContext':
+                    // The return statement is used to determine all the params of a directive.
+                    var returnVal = null;
+                    body.forEach(function(curStatement){
+                        if(typeof curStatement.type != 'undefined' && curStatement.type == 'returnContext') {
+                            returnVal = curStatement.value;
+                        }
+                    });
+                    if(returnVal) {
+                        // @TODO: get the scope object and parse the link function for $attrs. Combine into to the params object.
+                        var link = null;
+                        var scope = null;
+                        returnVal.members.forEach(function(curMember){
+                            if(curMember.name == 'scope') { scope = curMember.value; }
+                            if(curMember.name == 'link') { link = curMember.value; }
+                        });
+                        var params = []
+                        if(scope) {
+                            scope.members.forEach(function(curMember){
+                                params.push(curMember.name);
+                            });
+                        }
+                        nodeWrapper.visitAllChildren(attrFinder);
+                        link = attrFinder.attrContext;
+                        if(link.length > 0) {
+                            params = params.concat(link);
+                        }
+                        return params;
+                    }
+                    break;
                 default:
+                    return body;
                     break;
             }
             // return the current Context to the global state.
@@ -316,9 +373,7 @@ var contextVisitor = vs.visitorFactory({
         if(nodeWrapper.node.kind == 'init') {
             var propName = nodeWrapper.key.visit(this);
             var objContext = { name : propName, type : nodeWrapper.node.value.type, location: nodeWrapper.node.loc };
-            if(nodeWrapper.node.value.type == 'Literal') {
-                objContext.value = nodeWrapper.value.visit(this);
-            }
+            objContext.value = nodeWrapper.value.visit(this);
             return objContext;
         }
     },
