@@ -116,6 +116,15 @@ var contextVisitor = vs.visitorFactory({
                                 context.interfce = controllerArgs;
                             }
                             break;
+                        case 'angularAnimationContext' :
+                            var animationArgs = nodeWrapper.arguments.nodes[1].visit(this);
+                            if( nodeWrapper.arguments.nodes[1].node.type == 'ArrayExpression' ) {
+                                animationArgs.pop();
+                                context.requirements = animationArgs;
+                            } else {
+                                context.requirements = animationArgs;
+                            }
+                            break;
                         default:
                             break;
                     }
@@ -161,6 +170,9 @@ var contextVisitor = vs.visitorFactory({
                         break;
                     case 'controller' :
                         newContext.type = 'angularControllerContext';
+                        break;
+                    case 'animation' :
+                        newContext.type = 'angularAnimationContext';
                         break;
                     default :
                         return object + "." + property;
@@ -511,31 +523,134 @@ matchComments(globalContext);
 
 // Phase 3. Output the resulting datastructure as a PHP like skeleton file that is readable by Doxygen.
 function renderContext(curContext, tablevel) {
+    var output = '';
+    var tabs = '';
+
     if(typeof tablevel == 'undefined') { tablevel = 0; }
+    for (var i = 0; i < tablevel; i++) {
+        tabs += '  ';
+    };
 
     // This is a class.
     if( typeof curContext.interfce != 'undefined' ) {
+        if( typeof curContext.docBlock != 'undefined' ) {
+            output += renderDocBlock(curContext.docBlock[0].value, tabs);
+        }
+
+        var angularType = null;
+        switch( curContext.type ) {
+            case 'angularControllerContext' :
+                angularType = 'Controller';
+                break;
+            case 'angularFactoryContext' :
+                angularType = 'Factory';
+                break;
+            case 'angularServiceContext' :
+                angularType = 'Service';
+                break;
+            default :
+                break;
+        }
+
+        output += tabs + 'class ' + curContext.name;
         if( curContext.interfce.type == 'externalIntrfce' ) {
             // This class inherits from some external Class.
+            output += ' extends ' + curContext.interfce.name
+            if(angularType) { output += ' , angular.' + angularType; }
+            output += '\n' + tabs + '{' + '\n';
         } else if( curContext.interfce.type == 'jsObjectContext' ) {
+            if(angularType) { output += ' extends angular.' + angularType; }
+            output += '\n' + tabs + '{' + '\n';
             // Recurse into each class member.
+            tablevel++;
             curContext.interfce.members.forEach(function(curMember) {
-                renderContext(curMember, tablevel++);
+                output += renderContext(curMember, tablevel);
             });
         }
+        output += tabs + '}' + '\n\n';
     } else if( typeof curContext.params != 'undefined' ) {
         // This is a function.
-    } else if( curContext.type == 'Literal' ) {
-        // We a literal value.
+
+        var renderParams = function() {
+            var output = '';
+            if(curContext.params.length > 0) {
+                curContext.params.forEach(function(curParam){
+                    output += ' ' + '' + curParam + ' ,';
+                });
+                output = output.substring(0, output.length - 1);
+            }
+            return output;
+        };
+
+        var renderFunction = function() {
+            var output = '';
+            if( typeof curContext.docBlock != 'undefined' ) {
+                output += renderDocBlock(curContext.docBlock[0].value, tabs );
+            }
+            output += tabs + 'public function ' + curContext.name + ' (' + renderParams() + ')' + '\n' + tabs + '{' + '\n' + tabs + '}' + '\n\n';
+            return output;
+        }
+
+        if( curContext.type == 'angularDirectiveContext' ) {
+            output += tabs + 'class ' + curContext.name.replace(/-/g,'_') + ' extends angular.Directive' + '\n' + tabs + '{' + '\n';
+            tabs += tabs;
+            output += renderFunction();
+            tabs = tabs.substring(0, (tabs.length / 2) );
+            output += tabs + '}' + '\n\n';
+        } else {
+            output += renderFunction();
+        }
+    } else if ( curContext.type == 'angularAnimationContext' ) {
+        if( typeof curContext.docBlock != 'undefined' ) {
+            output += renderDocBlock(curContext.docBlock[0].value, tabs );
+        }
+        output += tabs + 'class ' + curContext.name.replace(/-/g,'_') + ' extends angular.Animation' + '\n' + tabs + '{' + '\n';
+        output += tabs + '}' + '\n\n';
+    } else if( curContext.type == 'angularModuleContext' ) {
+        // Angular Modules are interpreted as a namespace.
+        if( typeof curContext.docBlock != 'undefined' ) {
+            output += renderDocBlock(curContext.docBlock[0].value, tabs);
+        }
+        output += 'namespace ' + curContext.name + ';' + '\n\n';
+        tablevel++;
+    } else {
+        // Treat anything else as a public attribute.
+        if( typeof curContext.docBlock != 'undefined' ) {
+            output += renderDocBlock(curContext.docBlock[0].value, tabs);
+        }
         // @TODO: determine the type.
+        output += tabs + 'public ' + '' + curContext.name + ';' + '\n\n';
     }
 
     if( typeof curContext.contexts != 'undefined' ) {
         // Recurse to the children contexts.
         curContext.contexts.forEach(function(childContext){
-            renderContext(childContext);
+            output += renderContext(childContext, tablevel);
         });
     }
+
+    return output;
 };
 
-console.log(prettyjson.render(globalContext));
+function renderDocBlock(docString, prefix) {
+    var output = '';
+    output += prefix + '/*';
+
+    var docArr = docString.split('\n');
+    docArr.forEach(function(curLine, index){
+        if(index > 0) {
+            output += prefix + ' ';
+        }
+        output += curLine.trim() + '\n';
+    });
+    output = output.substring(0, output.length - 1);
+    output += '*/' + '\n';
+
+    return output;
+}
+
+//console.log(prettyjson.render(globalContext.contexts[0].contexts[3]));
+
+console.log('<?php');
+console.log(renderContext(globalContext));
+console.log('?>');
