@@ -5,5 +5,4 @@ latex/
 
 # Example / Testing Files #
 ###########################
-example.js
-example_extras.js
+example*.js
