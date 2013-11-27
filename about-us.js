@@ -1,4 +1,7 @@
 angular.module('about_us_module', [])
+/**
+ * teamMember factory makes teammembers of awesome.
+ */
     .factory('teamMemberFactory', ['$http', '$q', function($http, $q) {
         var teamMembers;
         var wait = $q.defer();
@@ -10,7 +13,6 @@ angular.module('about_us_module', [])
                 }
             );
 
-        return wait.promise;
     }])
     .directive('stickyNav', [function(){
         return {

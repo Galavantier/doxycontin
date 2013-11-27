@@ -43,6 +43,11 @@ var module = angular.module('example_module', ['$q'])
 
             $scope.selectedMember;
 
+            /**
+             * sljfalskdfj
+             * @param  object member [description]
+             * @param  int rowNum [description]
+             */
             $scope.clickMember = function(member,rowNum) {
                 $scope.selectedMember = member;
                 $scope.bioBoxOpen = rowNum;

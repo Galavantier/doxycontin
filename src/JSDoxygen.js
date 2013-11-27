@@ -329,7 +329,9 @@ var contextVisitor = vs.visitorFactory({
                     });
 
                     // Determine if we are using an externally defined interface (i.e. a promise object), or if the interface is explicitly defined (i.e. with a jsObjectContext);
-                    if(typeof factoryIntrfce.type != 'undefined' && factoryIntrfce.type == 'jsObjectContext') {
+                    if(!factoryIntrfce) {
+                        interfce = null;
+                    } else if(typeof factoryIntrfce.type != 'undefined' && factoryIntrfce.type == 'jsObjectContext') {
                         interfce = factoryIntrfce;
                     }
                     else {
@@ -545,7 +547,7 @@ function matchComments(context) {
     }
 
     // Recursively match comments of child contexts.
-    if(typeof context.interfce != 'undefined' && typeof context.interfce.members != 'undefined') {
+    if(typeof context.interfce != 'undefined' && context.interfce && typeof context.interfce.members != 'undefined') {
         context.interfce.members.forEach(function(member){
             matchComments(member);
         });
@@ -571,7 +573,8 @@ function renderContext(curContext, tablevel) {
     // This is a class.
     if( typeof curContext.interfce != 'undefined' ) {
         if( typeof curContext.docBlock != 'undefined' ) {
-            output += renderDocBlock(curContext.docBlock[0].value, tabs);
+            var wargingMsg = (curContext.interfce == null) ? '<strong>WARNGING!</strong> No interface could be parsed from this class. This could indicate a programming error. <img src="http://www.r-bloggers.com/wp-content/uploads/2010/04/vader-fail1.jpg" />' : false;
+            output += renderDocBlock(curContext.docBlock[0].value, tabs, wargingMsg);
         }
 
         var angularType = null;
@@ -590,31 +593,35 @@ function renderContext(curContext, tablevel) {
         }
 
         output += tabs + 'class ' + curContext.name;
-        if( curContext.interfce.type == 'externalIntrfce' ) {
-            // This class inherits from some external Class.
-            output += ' extends ' + curContext.interfce.name
-            if(angularType) { output += ' , angular.' + angularType; }
+        if( !curContext.interfce ) {
             output += '\n' + tabs + '{' + '\n';
-        } else if( curContext.interfce.type == 'jsObjectContext' ) {
-            if(angularType) { output += ' extends angular.' + angularType; }
-            output += '\n' + tabs + '{' + '\n';
+        } else {
+            if( curContext.interfce.type == 'externalIntrfce' ) {
+                // This class inherits from some external Class.
+                output += ' extends ' + curContext.interfce.name
+                if(angularType) { output += ' , angular.' + angularType; }
+                output += '\n' + tabs + '{' + '\n';
+            } else if( curContext.interfce.type == 'jsObjectContext' ) {
+                if(angularType) { output += ' extends angular.' + angularType; }
+                output += '\n' + tabs + '{' + '\n';
 
-            // Sort the interface members so that functions all come last
-            curContext.interfce.members.sort(function( a, b ){
-                if( typeof a.params != 'undefined' && typeof b.params == 'undefined' ) {
-                    return 1;
-                } else if ( typeof a.params == 'undefined' && typeof b.params != 'undefined' ) {
-                    return -1;
-                } else {
-                    return 0;
-                }
-            });
+                // Sort the interface members so that functions all come last
+                curContext.interfce.members.sort(function( a, b ){
+                    if( typeof a.params != 'undefined' && typeof b.params == 'undefined' ) {
+                        return 1;
+                    } else if ( typeof a.params == 'undefined' && typeof b.params != 'undefined' ) {
+                        return -1;
+                    } else {
+                        return 0;
+                    }
+                });
 
-            // Recurse into each class member.
-            tablevel++;
-            curContext.interfce.members.forEach(function(curMember) {
-                output += renderContext(curMember, tablevel);
-            });
+                // Recurse into each class member.
+                tablevel++;
+                curContext.interfce.members.forEach(function(curMember) {
+                    output += renderContext(curMember, tablevel);
+                });
+            }
         }
         output += tabs + '}' + '\n\n';
     } else if( typeof curContext.params != 'undefined' ) {
@@ -686,7 +693,7 @@ function renderContext(curContext, tablevel) {
     return output;
 };
 
-function renderDocBlock(docString, prefix) {
+function renderDocBlock(docString, prefix, warningMsg) {
     var output = '';
     output += prefix + '/*';
 
@@ -698,7 +705,12 @@ function renderDocBlock(docString, prefix) {
         output += curLine.trim() + '\n';
     });
     output = output.substring(0, output.length - 1);
-    output += '*/' + '\n';
+
+    if(warningMsg) {
+        output += '*\n' + prefix + ' * <i>' + warningMsg + '</i>\n';
+    }
+
+    output += prefix + ' */' + '\n';
 
     return output;
 }
