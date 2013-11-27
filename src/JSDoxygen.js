@@ -89,6 +89,7 @@ var contextVisitor = vs.visitorFactory({
                             context.requirements = nodeWrapper.arguments.nodes[1].visit(this);
                             this.curModule = context;
                             break;
+                        case 'angularServiceContext' :
                         case 'angularFactoryContext' :
                             var factoryIntrfce = nodeWrapper.arguments.nodes[1].visit(this);
                             if( nodeWrapper.arguments.nodes[1].node.type == 'ArrayExpression' ) {
@@ -303,6 +304,7 @@ var contextVisitor = vs.visitorFactory({
                         }
                     }
                     break;
+                case 'angularServiceContext':
                 case 'angularFactoryContext':
                     // If the requirements haven't been determined yet, get them from the function params.
                     if(typeof myContext.requirements == 'undefined') {
@@ -649,7 +651,7 @@ function renderDocBlock(docString, prefix) {
     return output;
 }
 
-//console.log(prettyjson.render(globalContext.contexts[0].contexts[3]));
+//console.log(prettyjson.render(globalContext));
 
 console.log('<?php');
 console.log(renderContext(globalContext));
