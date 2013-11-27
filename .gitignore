@@ -1,0 +1,9 @@
+# Doxygen Folders #
+#################
+html/
+latex/
+
+# Example / Testing Files #
+###########################
+example.js
+example_extras.js
