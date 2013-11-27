@@ -1,32 +1,73 @@
 var module = angular.module('example_module', ['$q'])
-/**
- * service and stuffz
- */
-.service('DOMevents', ['$rootScope', function($rootScope) {
-  var service = {};
+    .controller('teamBioController', ['$scope', 'teamMemberFactory', '$location', function($scope, teamMemberFactory, $location) {
+        $scope.teamMembers = null;
 
-  service.initFiltersAndSortby = function(scope) {
-    jQuery('html').on('click', function(e) {
-      var isFirefox = typeof InstallTrigger !== 'undefined';
-      var element = (isFirefox) ? jQuery(e.target) : jQuery(e.srcElement);
+        teamMemberFactory.then(function(data){
+            $scope.teamMembers = data;
+            $scope.rows = [];
+            var numPplRow;
 
-      // If not filters options are selected, we turn off the filters.
-      var filtersSelected = (element.closest('.filters-wrapper').length > 0);
-      if (filtersSelected == 0) {
-        scope.$apply(function() {
-          scope.filterDropdownVisible = false;
+            var viewPort = jQuery(window).width();
+
+            numPplRow = 4;
+
+            // viewport for tablet
+            if ( viewPort <= 767 ) {
+                numPplRow = 3;
+            }
+
+            // viewport for phone
+            if ( viewPort <= 480 ) {
+                numPplRow = 2;
+            }
+
+            var rowCount = 0;
+            var currRow = 0;
+            var currRowArray = [];
+            $scope.bioBoxOpen = -1;
+            for (var i = 0; i < $scope.teamMembers.length; i++) {
+                currRowArray.push($scope.teamMembers[i]);
+
+                rowCount++;
+                if (rowCount == numPplRow) {
+                    rowCount = 0;
+                    $scope.rows.push(currRowArray);
+                    currRowArray = [];
+                    currRow++;
+                }
+
+            };
+            if (rowCount > 0) {
+                $scope.rows.push(currRowArray);
+            }
+
+            $scope.selectedMember;
+
+            $scope.clickMember = function(member,rowNum) {
+                $scope.selectedMember = member;
+                $scope.bioBoxOpen = rowNum;
+
+                $location.hash(member.name.replace(' ', '-') + '-Bio');
+            }
+            $scope.closeMember = function() {
+                $scope.bioBoxOpen = -1;
+
+                // We have to change this after a timeout so that the close animation does not pop.
+                window.setTimeout(function(){
+                    $scope.$apply(function(){ $scope.selectedMember = null; });
+                }, 600);
+            }
+
+            if($location.hash().search('-Bio') != -1) {
+                var name = $location.hash().replace('-', ' ').replace('-Bio', '');
+                for (var i = 0; i < $scope.rows.length; i++) {
+                    for(var j = 0; j < $scope.rows[i].length; j++) {
+                        if($scope.rows[i][j].name == name) {
+                            $scope.clickMember($scope.rows[i][j], i);
+                            break;
+                        }
+                    }
+                };
+            }
         });
-      }
-
-      // If not sortby options are selected, we turn off the sortby.
-      var sortbySelected = (element.closest('.sortby-wrapper').length > 0);
-      if (sortbySelected == 0) {
-        scope.$apply(function() {
-          scope.sortbyDropdownVisible = false;
-        });
-      }
-    });
-  }
-
-  return service;
-}]);
+    }]);

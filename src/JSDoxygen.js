@@ -73,6 +73,10 @@ var contextVisitor = vs.visitorFactory({
         var context = nodeWrapper.callee.visit(this);
 
         if(this.curContext.type == 'functionBodyContext') {
+            var self = this;
+            nodeWrapper.arguments.nodes.forEach(function(curArg){
+                curArg.visit(self);
+            });
             return context;
         }
 
@@ -380,6 +384,37 @@ var contextVisitor = vs.visitorFactory({
                     }
                     interfce = scopeContext;
                     break;
+                case 'functionBodyContext':
+                    var body = nodeWrapper.body.visit(this);
+                    /*console.log(this.curContext.symbolTable.$scope);
+                    console.log(myContext);*/
+                    var scopeContext = null;
+                    if( this.curContext.symbolTable.hasOwnProperty('$scope') ) {
+                        scopeContext = this.curContext.symbolTable.$scope;
+                    } else if ( this.curContext.symbolTable.hasOwnProperty('scope') ) {
+                        scopeContext = this.curContext.symbolTable.scope;
+                    }
+
+                    var parentScopeContext = null;
+                    if( myContext.symbolTable.hasOwnProperty('$scope') ) {
+                        parentScopeContext = myContext.symbolTable.$scope;
+                    } else if ( myContext.symbolTable.hasOwnProperty('scope') ) {
+                        parentScopeContext = myContext.symbolTable.scope;
+                    }
+
+                    if( scopeContext && parentScopeContext ) {
+                        parentScopeContext.members = parentScopeContext.members.concat(scopeContext.members);
+                        // Only keep unique members
+                        var unique = [];
+                        var uniqueObjs = [];
+                        for (var i = 0; i < parentScopeContext.members.length; i++) {
+                            if ( unique.indexOf(parentScopeContext.members[i].name) == -1) {
+                                unique.push(parentScopeContext.members[i].name);
+                                uniqueObjs.push(parentScopeContext.members[i]);
+                            }
+                        }
+                        parentScopeContext.members = uniqueObjs;
+                    }
                 default:
                     var params = [];
                     var self = this;
@@ -563,6 +598,18 @@ function renderContext(curContext, tablevel) {
         } else if( curContext.interfce.type == 'jsObjectContext' ) {
             if(angularType) { output += ' extends angular.' + angularType; }
             output += '\n' + tabs + '{' + '\n';
+
+            // Sort the interface members so that functions all come last
+            curContext.interfce.members.sort(function( a, b ){
+                if( typeof a.params != 'undefined' && typeof b.params == 'undefined' ) {
+                    return 1;
+                } else if ( typeof a.params == 'undefined' && typeof b.params != 'undefined' ) {
+                    return -1;
+                } else {
+                    return 0;
+                }
+            });
+
             // Recurse into each class member.
             tablevel++;
             curContext.interfce.members.forEach(function(curMember) {
@@ -615,13 +662,18 @@ function renderContext(curContext, tablevel) {
         }
         output += 'namespace ' + curContext.name + ';' + '\n\n';
         tablevel++;
+    } else if ( curContext.type == 'globalContext' ) {
+        //Don't print anything.
     } else {
-        // Treat anything else as a public attribute.
-        if( typeof curContext.docBlock != 'undefined' ) {
-            output += renderDocBlock(curContext.docBlock[0].value, tabs);
+        // Ignore anything that starts with a $, because it is probably a special function or object from Angular or JQuery.
+        if(curContext.name.indexOf('$') != 0) {
+            // Treat anything else as a public attribute.
+            if( typeof curContext.docBlock != 'undefined' ) {
+                output += renderDocBlock(curContext.docBlock[0].value, tabs);
+            }
+            // @TODO: determine the type.
+            output += tabs + 'public ' + '' + curContext.name + ';' + '\n\n';
         }
-        // @TODO: determine the type.
-        output += tabs + 'public ' + '' + curContext.name + ';' + '\n\n';
     }
 
     if( typeof curContext.contexts != 'undefined' ) {
