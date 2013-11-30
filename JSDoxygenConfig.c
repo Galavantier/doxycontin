@@ -892,13 +892,13 @@ HTML_FILE_EXTENSION    = .html
 # have to redo this when upgrading to a newer version of doxygen or when
 # changing the value of configuration settings such as GENERATE_TREEVIEW!
 
-HTML_HEADER            =
+HTML_HEADER            = js_header.html
 
 # The HTML_FOOTER tag can be used to specify a personal HTML footer for
 # each generated HTML page. If it is left blank doxygen will generate a
 # standard footer.
 
-HTML_FOOTER            =
+HTML_FOOTER            = js_footer.html
 
 # The HTML_STYLESHEET tag can be used to specify a user-defined cascading
 # style sheet that is used by each HTML page. It can be used to
@@ -907,7 +907,7 @@ HTML_FOOTER            =
 # HTML_EXTRA_STYLESHEET instead of this one, as it is more robust and this
 # tag will in the future become obsolete.
 
-HTML_STYLESHEET        =
+HTML_STYLESHEET        = js_stylesheet.css
 
 # The HTML_EXTRA_STYLESHEET tag can be used to specify an additional
 # user-defined cascading style sheet that is included after the standard
@@ -936,7 +936,7 @@ HTML_EXTRA_FILES       =
 # 180 is cyan, 240 is blue, 300 purple, and 360 is red again.
 # The allowed range is 0 to 359.
 
-HTML_COLORSTYLE_HUE    = 220
+HTML_COLORSTYLE_HUE    = 20
 
 # The HTML_COLORSTYLE_SAT tag controls the purity (or saturation) of
 # the colors in the HTML output. For a value of 0 the output will use
@@ -1237,7 +1237,7 @@ SEARCHENGINE           = YES
 # enabled the indexing and searching needs to be provided by external tools.
 # See the manual for details.
 
-SERVER_BASED_SEARCH    = NO
+SERVER_BASED_SEARCH    = YES
 
 # When EXTERNAL_SEARCH is enabled doxygen will no longer generate the PHP
 # script for searching. Instead the search results are written to an XML file
@@ -1286,7 +1286,7 @@ EXTRA_SEARCH_MAPPINGS  =
 # If the GENERATE_LATEX tag is set to YES (the default) Doxygen will
 # generate Latex output.
 
-GENERATE_LATEX         = YES
+GENERATE_LATEX         = NO
 
 # The LATEX_OUTPUT tag is used to specify where the LaTeX docs will be put.
 # If a relative path is entered the value of OUTPUT_DIRECTORY will be
