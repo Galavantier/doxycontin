@@ -1,2 +1,2 @@
 #!/bin/bash
-node src/JSDoxygen.js -f $1
+node "$DOXYCOTON_PATH/src/JSDoxygen.js" -f $1
