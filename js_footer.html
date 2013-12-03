@@ -1,5 +1,7 @@
 <!-- HTML footer for doxygen 1.8.4-->
 <!-- start footer part -->
+<div id="EasyPageComments"></div>
+<div id="EasyPageCommentForm"></div>
 <!--BEGIN GENERATE_TREEVIEW-->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
@@ -17,5 +19,22 @@ $generatedby &#160;<a href="http://www.doxygen.org/index.html">
 </a> $doxygenversion
 </small></address>
 <!--END !GENERATE_TREEVIEW-->
+<script type="text/javascript">
+// Easy Page Comments
+    function showEasyPageComments(setname, data) {
+      document.getElementById('EasyPageComments').innerHTML = data;
+    }
+
+    function showEasyPageCommentForm(setname, data) {
+      document.getElementById('EasyPageCommentForm').innerHTML = data;
+    }
+
+    function addEasyPageComments() {
+      EasyPageComments.createCommentsList('EasyPageComments');
+      EasyPageComments.createCommentForm('EasyPageComments');
+    }
+
+    document.addEventListener("DOMContentLoaded", addEasyPageComments, false);
+</script>
 </body>
 </html>
