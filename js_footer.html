@@ -1,5 +1,6 @@
 <!-- HTML footer for doxygen 1.8.4-->
 <!-- start footer part -->
+<div ng-include="'$relpath^comments/partials/commentBlock.html'"></div>
 <!--BEGIN GENERATE_TREEVIEW-->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
@@ -17,5 +18,15 @@ $generatedby &#160;<a href="http://www.doxygen.org/index.html">
 </a> $doxygenversion
 </small></address>
 <!--END !GENERATE_TREEVIEW-->
+<!--BEGIN ANGULAR-->
+<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.3/angular.min.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.3/angular-cookies.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.3/angular-animate.min.js"></script>
+<script src="$relpath^comments/ngAnimate-animate.css/animate.js"></script>
+<script src="$relpath^comments/angular-md5/angular-md5.js"></script>
+<script src="$relpath^comments/angular-markdown-directive/showdown/compressed/showdown.js"></script>
+<script src="$relpath^comments/angular-markdown-directive/markdown.js"></script>
+<script type="text/javascript" src="$relpath^comments/gvtAPIcomments.angular.js"></script>
+<!--END ANGULAR-->
 </body>
 </html>
